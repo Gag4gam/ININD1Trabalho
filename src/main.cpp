@@ -7,12 +7,12 @@
 #define SO_temp 13
 #define pinage_res 17
 #define pinage_flow_sensor 8
+#define N 10
 
 long currentMillis = 0;
 long previousMillis = 0;
 long millisTemp = 0;
 int interval = 1000;
-
 float calibrationFactor = 4.5;
 volatile byte pulseCount;
 byte pulse1Sec = 0;
@@ -20,6 +20,11 @@ float flowRate;
 unsigned int flowMilliLitres;
 unsigned long totalMilliLitres;
 int currentPwmValue = 0;
+float alpha = 0.1; // Constante do filtro (ajuste conforme necessário)
+float filtered_temp;
+float tempReadings[N]; // Array para armazenar as últimas N leituras
+int currentIndex = 0; // Índice atual no array de leituras
+
 
 MAX6675 thermocouple(CLK_temp, CS_temp, SO_temp);
 
@@ -36,8 +41,29 @@ int getTotalMilliLitres(){
   return totalMilliLitres;
 }
 
-int getTemperature(){
-  return thermocouple.readCelsius();
+float getSmoothedTemperature() {
+  // Adicionar a nova leitura ao array
+  tempReadings[currentIndex] = thermocouple.readCelsius();
+  currentIndex = (currentIndex + 1) % N;
+
+  // Calcular a média das últimas N leituras (SMA)
+  float sum = 0.0;
+
+  for (int i = 0; i < N; i++) {
+    sum += tempReadings[i];
+  }
+
+  float sma_temp = sum / N;
+
+  // Aplicar o filtro EMA na média calculada
+  filtered_temp = float((alpha * sma_temp) + ((1 - alpha) * filtered_temp));
+
+  return filtered_temp;
+}
+
+float getTemperature(){
+
+  return float(getSmoothedTemperature());
 }
 
 void calcFlowRate(){
@@ -126,6 +152,7 @@ void printSetup(){
 
 void setup() {
   Serial.begin(115200);
+  delay(5000);
   ledcSetup(0,25000,8);
   ledcAttachPin(pinage_fan,0);
   pinMode(pinage_res,OUTPUT);
@@ -139,6 +166,7 @@ void setup() {
   setFanSpeed(100);
   setResistance(0);
   printSetup();
+  
 }
 
 void loop() {
@@ -146,7 +174,9 @@ void loop() {
   setResistance(0);// LIGA A RESISTÊNCIA
   calcFlowRate();
   decisionFan();
-  printFlowRate();
+  //printFlowRate();
+  Serial.print(getTemperature());
+  delay(500);
 }
 
 
