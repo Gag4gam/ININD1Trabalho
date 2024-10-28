@@ -63,7 +63,7 @@ float getSmoothedTemperature() {
 
 float getTemperature(){
 
-  return float(getSmoothedTemperature());
+  return float((0.99613 * getSmoothedTemperature()) +  0.47249);
 }
 
 void calcFlowRate(){
@@ -110,6 +110,7 @@ void decisionFan(){
     return;
   }
 
+
   if (temperature >= 80 && temperature < 90){
     setFanSpeed(100);
   }
@@ -125,7 +126,6 @@ void decisionFan(){
   else if (temperature >= 40 && temperature < 50){
     setFanSpeed(20);
   }
-
   else if (temperature >= 90){
     setResistance(0);
     Serial.println("Planta Desligada Por Segurança");
@@ -175,7 +175,7 @@ void loop() {
   calcFlowRate();
   decisionFan();
   //printFlowRate();
-  Serial.print(getTemperature());
+  Serial.println(getTemperature());
   delay(500);
 }
 
