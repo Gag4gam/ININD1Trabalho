@@ -8,6 +8,7 @@
 #define pinage_res 17
 #define pinage_flow_sensor 8
 #define N 10
+#define PT100 5
 
 long currentMillis = 0;
 long previousMillis = 0;
@@ -41,29 +42,9 @@ int getTotalMilliLitres(){
   return totalMilliLitres;
 }
 
-float getSmoothedTemperature() {
-  // Adicionar a nova leitura ao array
-  tempReadings[currentIndex] = thermocouple.readCelsius();
-  currentIndex = (currentIndex + 1) % N;
+double getTemperature(){
 
-  // Calcular a média das últimas N leituras (SMA)
-  float sum = 0.0;
-
-  for (int i = 0; i < N; i++) {
-    sum += tempReadings[i];
-  }
-
-  float sma_temp = sum / N;
-
-  // Aplicar o filtro EMA na média calculada
-  filtered_temp = float((alpha * sma_temp) + ((1 - alpha) * filtered_temp));
-
-  return filtered_temp;
-}
-
-float getTemperature(){
-
-  return float((0.99613 * getSmoothedTemperature()) +  0.47249);
+  return thermocouple.readCelsius();
 }
 
 void calcFlowRate(){
@@ -156,7 +137,9 @@ void setup() {
   ledcSetup(0,25000,8);
   ledcAttachPin(pinage_fan,0);
   pinMode(pinage_res,OUTPUT);
+  pinMode(PT100, INPUT);
   pinMode(pinage_flow_sensor, INPUT_PULLUP);
+  analogReadResolution(10);
   pulseCount = 0;
   flowRate = 0.0;
   flowMilliLitres = 0;
@@ -170,12 +153,20 @@ void setup() {
 }
 
 void loop() {
-  setFanSpeed(100);
-  setResistance(0);// LIGA A RESISTÊNCIA
-  calcFlowRate();
-  decisionFan();
+  //setFanSpeed(100);
+  //setResistance(0);// LIGA A RESISTÊNCIA
+  //calcFlowRate();
+ // decisionFan();
   //printFlowRate();
-  Serial.println(getTemperature());
+  int adcValue = analogRead(PT100);
+  double temp = map(adcValue, 0, 1023, 0, 100);
+
+  Serial.print(temp);
+  Serial.print(",");
+  Serial.print(getTemperature());
+  Serial.print(",");
+  Serial.println(adcValue);
+
   delay(500);
 }
 
