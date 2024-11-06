@@ -1,86 +1,60 @@
 #include <ArduinoOTA.h>
-#include <max6675.h>
 
 #define pinage_fan 15
-#define CLK_temp 11
-#define CS_temp 9
-#define SO_temp 13
 #define pinage_res 17
-#define pinage_flow_sensor 8
-#define N 10
+
 #define PT100 5
 
-long currentMillis = 0;
-long previousMillis = 0;
+
 long millisTemp = 0;
-int interval = 1000;
-float calibrationFactor = 4.5;
-volatile byte pulseCount;
-byte pulse1Sec = 0;
-float flowRate;
-unsigned int flowMilliLitres;
-unsigned long totalMilliLitres;
+
+
+const int N = 10;
+
 int currentPwmValue = 0;
-float alpha = 0.1; // Constante do filtro (ajuste conforme necessário)
-float filtered_temp;
-float tempReadings[N]; // Array para armazenar as últimas N leituras
-int currentIndex = 0; // Índice atual no array de leituras
+float readings[N]; // Array para armazenar as últimas N leituras
+int readIndex = 0; // Índice atual no array de leituras
+int total = 0; // Soma das leituras
+int average = 0; // Média das leituras
 
-
-MAX6675 thermocouple(CLK_temp, CS_temp, SO_temp);
-
-void IRAM_ATTR pulseCounter()
-{
-  pulseCount++;
+double mapToRange(int value, int in_min, int in_max, double out_min, double out_max) 
+{ 
+  return (double)(value - in_min) * (out_max - out_min) / (in_max - in_min) + out_min; 
 }
 
-int getFlowRate(){
-  return int(flowRate);
-}
+float smoothedTemp(){
+  total = total - readings[readIndex];
+  readings[readIndex] = analogRead(PT100);
+  total = total + readings[readIndex];
+  readIndex = readIndex + 1;
 
-int getTotalMilliLitres(){
-  return totalMilliLitres;
+  if (readIndex >= N) {
+    readIndex = 0;
+  }
+  average = total / N;
+  return average;
 }
 
 double getTemperature(){
+  float average = smoothedTemp();
+  double temp = mapToRange(average, 0, 1023, 0.0, 100.0);
 
-  return thermocouple.readCelsius();
+  return (0.91 * temp) + (8.35);
+
 }
 
-void calcFlowRate(){
 
-  currentMillis = millis();
-  if (currentMillis - previousMillis > interval) {
-    pulse1Sec = pulseCount;
-    pulseCount = 0;
-
-    flowRate = ((1000.0 / (millis() - previousMillis)) * pulse1Sec) / calibrationFactor;
-    previousMillis = millis();
-
-
-    flowMilliLitres = (flowRate / 60) * 1000;
-
-    totalMilliLitres += flowMilliLitres;
-  }
-}
 
 void setFanSpeed(int speed){
   currentPwmValue = map(speed, 0, 100, 0, 255);
   ledcWrite(0,currentPwmValue);
 }
 
+
 void setResistance(int resistance){
   digitalWrite(pinage_res,resistance == 0 ? LOW : HIGH);
 }
 
-void printFlowRate(){
-  Serial.print("Vazão: ");
-  Serial.print(flowRate);
-  Serial.print(" L/min\t");
-  Serial.print("Total: ");
-  Serial.print(totalMilliLitres);
-  Serial.println("mL");
-}
 
 void decisionFan(){
   int temperature = getTemperature();
@@ -120,13 +94,10 @@ void decisionFan(){
 }
 void printSetup(){
   int resistaneStatus = digitalRead(pinage_res);
-  Serial.println("Setup Inicializado");
   Serial.print("Resistência: ");
   Serial.println(resistaneStatus == 0 ? "Desligada" : "Ligada");
   Serial.print("Fan Speed Initial: ");
   Serial.println(map(currentPwmValue, 0, 255, 0, 100) + "%");
-  Serial.println("Flow Sensor Initializado");
-  Serial.println("Thermocouple Initializado");
   Serial.println("Setup Finalizado");
 }
 
@@ -138,41 +109,27 @@ void setup() {
   ledcAttachPin(pinage_fan,0);
   pinMode(pinage_res,OUTPUT);
   pinMode(PT100, INPUT);
-  pinMode(pinage_flow_sensor, INPUT_PULLUP);
   analogReadResolution(10);
-  pulseCount = 0;
-  flowRate = 0.0;
-  flowMilliLitres = 0;
-  totalMilliLitres = 0;
-  previousMillis = 0;
-  attachInterrupt(digitalPinToInterrupt(pinage_flow_sensor), pulseCounter, FALLING);
+  for (int i = 0; i < N; i++) {
+    readings[i] = 0;
+  }
+
   setFanSpeed(100);
-  setResistance(0);
+  setResistance(1);
   printSetup();
   
 }
 
-void loop() {
-  //setFanSpeed(100);
-  //setResistance(0);// LIGA A RESISTÊNCIA
-  //calcFlowRate();
- // decisionFan();
-  //printFlowRate();
-  int adcValue = analogRead(PT100);
-  double temp = map(adcValue, 0, 1023, 0, 100);
 
-  Serial.print(temp);
-  Serial.print(",");
-  Serial.print(getTemperature());
-  Serial.print(",");
-  Serial.println(adcValue);
+
+void loop() {
+
+  decisionFan();
+  Serial.print("Temperatura: ");
+  Serial.println(getTemperature()); 
+  Serial.print("Fan Speed: ");
+  Serial.print(map(currentPwmValue,0,255,0,100));
+  Serial.println("%");
 
   delay(500);
 }
-
-
-
-
-
-
-
